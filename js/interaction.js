@@ -1,8 +1,6 @@
 /**
  * ArnesViz v2.5 – Módulo de interacción (App.Interaction)
- * Maneja eventos del DOM, drag & drop, zoom, pan,
- * restricción de movimiento, edición de catálogos desde barra lateral,
- * botón añadir global para catálogos, y la inicialización de la app.
+ * Mejoras: setActiveEntityButton para corregir iluminación.
  */
 
 App.Interaction = {
@@ -56,19 +54,19 @@ App.Interaction = {
         const entityButtons = document.querySelectorAll('#table-toolbar .entity-type-btn');
         entityButtons.forEach(btn => {
             btn.addEventListener('click', () => {
+                // Limpiar todos los botones
                 entityButtons.forEach(b => b.classList.remove('active'));
+                // Activar el clicado
                 btn.classList.add('active');
                 App.state.activeTableEntity = btn.dataset.entity;
-                // Limpiar selección de catálogo al cambiar de entidad
                 if (App.state.activeTableEntity !== 'catalogs') {
                     App.state.activeCatalogSection = null;
-                    App.state.expandedCatalogSections.clear();
                 }
                 App.Render.renderTable();
             });
         });
 
-        // Añadir botón de catálogos manualmente porque en HTML no existe aún
+        // Añadir botón de catálogos manualmente
         const tableToolbar = document.getElementById('table-toolbar');
         if (tableToolbar && !document.getElementById('table-entity-catalogs')) {
             const catalogsBtn = document.createElement('button');
@@ -80,7 +78,6 @@ App.Interaction = {
                 entityButtons.forEach(b => b.classList.remove('active'));
                 catalogsBtn.classList.add('active');
                 App.state.activeTableEntity = 'catalogs';
-                // Si no hay sección activa, seleccionar la primera por defecto
                 if (!App.state.activeCatalogSection) {
                     App.state.activeCatalogSection = 'people';
                 }
@@ -96,7 +93,6 @@ App.Interaction = {
             }
             const activeEntity = App.state.activeTableEntity || 'containers';
             if (activeEntity === 'catalogs') {
-                // Usar la sección de catálogo activa
                 const section = App.state.activeCatalogSection;
                 if (!section) {
                     App.Utils.showToast('Selecciona una sección de catálogo primero', 'warning');
@@ -427,7 +423,8 @@ App.Interaction = {
     /* ─── Edición de catálogos ─── */
     openCatalogEditor(catalogKey, entryId) {
         if (!App.state.editMode && entryId !== null) {
-            App.Utils.showToast('Activa el modo edición para editar catálogos', 'warning');
+            const extraData = { catalogKey, entryId, isNew: false };
+            this.openSidebar('catalog-editor', null, extraData);
             return;
         }
         if (!App.state.editMode && entryId === null) {
@@ -445,7 +442,6 @@ App.Interaction = {
         if (!content || !extraData) return;
         const { catalogKey, entryId, isNew } = extraData;
 
-        let newData;
         if (catalogKey === 'colorPalette') {
             const nameInput = document.getElementById('catalog-color-name');
             const hexInput = document.getElementById('catalog-color-hex');
@@ -468,26 +464,43 @@ App.Interaction = {
             }
         } else {
             const inputs = content.querySelectorAll('input[data-field], select[data-field]');
-            newData = {};
+            const newData = {};
+            let newId = entryId;
             inputs.forEach(input => {
+                const field = input.dataset.field;
                 let value = input.value;
                 if (input.type === 'number') value = value === '' ? null : Number(value);
-                else if (input.tagName === 'SELECT' && input.dataset.field === 'shielded') {
-                    value = value === 'true';
-                } else if (value === 'true') value = true;
+                else if (value === 'true') value = true;
                 else if (value === 'false') value = false;
-                newData[input.dataset.field] = value;
+                if (field === 'id') {
+                    newId = value.trim();
+                } else {
+                    newData[field] = value;
+                }
             });
+
+            if (!newId) {
+                App.Utils.showToast('El ID no puede estar vacío', 'error');
+                return;
+            }
+
             if (isNew) {
-                const newId = prompt('ID de la nueva entrada:');
-                if (!newId) return;
                 if (App.state.metadata.catalogs[catalogKey]?.[newId]) {
                     App.Utils.showToast('Ese ID ya existe', 'error');
                     return;
                 }
                 App.Data.createCatalogEntry(catalogKey, newId, newData);
             } else {
-                App.Data.updateCatalogEntry(catalogKey, entryId, newData);
+                if (newId !== entryId) {
+                    if (App.state.metadata.catalogs[catalogKey]?.[newId]) {
+                        App.Utils.showToast('El nuevo ID ya existe', 'error');
+                        return;
+                    }
+                    App.Data.deleteCatalogEntry(catalogKey, entryId);
+                    App.Data.createCatalogEntry(catalogKey, newId, newData);
+                } else {
+                    App.Data.updateCatalogEntry(catalogKey, entryId, newData);
+                }
             }
         }
 
@@ -495,6 +508,8 @@ App.Interaction = {
         App.Utils.showToast('Catálogo actualizado', 'success');
         this.closeSidebar();
         if (App.state.activeTableEntity === 'catalogs') {
+            if (!App.state.expandedCatalogs) App.state.expandedCatalogs = new Set();
+            App.state.expandedCatalogs.add(catalogKey);
             App.Render.renderTable();
         }
         App.Render.renderAll();
@@ -733,6 +748,8 @@ App.Interaction = {
         App.state.panX = pan.x;
         App.state.panY = pan.y;
 
+        if (!App.state.expandedCatalogs) App.state.expandedCatalogs = new Set();
+
         try {
             const response = await fetch('db.json');
             if (response.ok) {
@@ -771,7 +788,7 @@ App.Interaction = {
 
         App.Render.renderAll();
         this.updateFilterDropdowns();
-        console.log('ArnesViz v2.5 inicializado con correcciones de UX.');
+        console.log('ArnesViz v2.5 inicializado con mejoras UX.');
     }
 };
 
