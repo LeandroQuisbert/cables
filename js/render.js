@@ -1,7 +1,6 @@
 /**
  * ArnesViz v2.5 – Módulo de renderizado (App.Render)
- * Renderiza la tabla de datos, el canvas SVG, la vista de catálogos
- * (con acordeones funcionales y editor de catálogos mejorado) y el panel lateral.
+ * Mejoras: setActiveEntityButton, expansión de tablas de catálogos.
  */
 
 App.Render = {
@@ -18,6 +17,18 @@ App.Render = {
     renderAll() {
         this.renderTable();
         this.renderSVG();
+    },
+
+    // Activa el botón de la entidad activa en la barra de herramientas
+    setActiveEntityButton(entity) {
+        const buttons = document.querySelectorAll('#table-toolbar .entity-type-btn');
+        buttons.forEach(btn => {
+            if (btn.dataset.entity === entity) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
     },
 
     /* ───────── SVG ───────── */
@@ -295,6 +306,9 @@ App.Render = {
         const tableWrapper = document.getElementById('table-wrapper');
         if (!tableWrapper) return;
 
+        // Actualizar botón activo en la barra
+        this.setActiveEntityButton(App.state.activeTableEntity);
+
         if (App.state.activeTableEntity === 'catalogs') {
             const dataTable = document.getElementById('data-table');
             if (dataTable) dataTable.style.display = 'none';
@@ -375,6 +389,7 @@ App.Render = {
         tableWrapper.appendChild(catalogView);
 
         const catalogs = App.state.metadata?.catalogs || {};
+        if (!App.state.expandedCatalogs) App.state.expandedCatalogs = new Set();
 
         const catalogDefs = [
             { key: 'people', title: 'Personas', columns: ['id', 'name'] },
@@ -392,13 +407,14 @@ App.Render = {
             const data = catalogs[def.key] || {};
             const entries = Object.entries(data);
             const isActive = def.key === activeSection;
+            const isExpanded = App.state.expandedCatalogs.has(def.key);
             html += `<div class="catalog-section" data-catalog="${def.key}" style="margin-bottom: 8px; border: 1px solid ${isActive ? 'var(--accent-primary)' : 'var(--border-subtle)'}; border-radius: var(--radius-md); overflow: hidden; width: 100%;">`;
             html += `<div class="catalog-section-header" style="display:flex; align-items:center; padding: 10px 14px; background: ${isActive ? 'rgba(99,102,241,0.1)' : 'var(--bg-tertiary)'}; cursor:pointer; user-select:none;">
                 <span style="font-size:13px; font-weight:600; flex:1;">${def.title} (${entries.length})</span>
-                ${App.state.editMode ? `<button class="catalog-add-btn" data-catalog="${def.key}" style="font-size:11px; padding:4px 10px; background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-sm); cursor:pointer; margin-right:8px;">+ Añadir</button>` : ''}
                 <span class="accordion-arrow" style="transition:transform 0.2s;">▼</span>
             </div>`;
-            html += `<div class="catalog-section-body" style="display:none; max-height: 300px; overflow-y: auto; width: 100%;">`;
+            // Eliminado max-height y overflow-y: auto para permitir expansión total
+            html += `<div class="catalog-section-body" style="display:${isExpanded ? 'block' : 'none'}; width: 100%;">`;
             if (entries.length === 0) {
                 html += '<div style="font-size:11px; color:var(--text-muted); padding:12px;">Vacío</div>';
             } else {
@@ -431,12 +447,6 @@ App.Render = {
         catalogView.addEventListener('click', (e) => {
             const header = e.target.closest('.catalog-section-header');
             if (header) {
-                if (e.target.classList.contains('catalog-add-btn')) {
-                    const catalogKey = e.target.dataset.catalog;
-                    App.state.activeCatalogSection = catalogKey;
-                    App.Interaction.openCatalogEditor(catalogKey, null);
-                    return;
-                }
                 const section = header.parentElement;
                 const catalogKey = section.dataset.catalog;
                 const body = section.querySelector('.catalog-section-body');
@@ -453,6 +463,7 @@ App.Render = {
                         const prevArrow = prevActive.querySelector('.accordion-arrow');
                         if (prevArrow) prevArrow.style.transform = 'rotate(0deg)';
                         prevActive.style.borderColor = 'var(--border-subtle)';
+                        App.state.expandedCatalogs.delete(prevActive.dataset.catalog);
                     }
                     section.classList.add('active');
                     header.style.background = 'rgba(99,102,241,0.1)';
@@ -462,18 +473,24 @@ App.Render = {
                         if (arrow) arrow.style.transform = 'rotate(180deg)';
                     }
                     App.state.activeCatalogSection = catalogKey;
+                    App.state.expandedCatalogs.add(catalogKey);
                 } else {
                     if (body) {
                         const isOpen = body.style.display !== 'none';
                         body.style.display = isOpen ? 'none' : 'block';
                         if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+                        if (isOpen) {
+                            App.state.expandedCatalogs.delete(catalogKey);
+                        } else {
+                            App.state.expandedCatalogs.add(catalogKey);
+                        }
                     }
                 }
                 return;
             }
 
             const row = e.target.closest('.catalog-row');
-            if (row && App.state.editMode) {
+            if (row) {
                 const catalogKey = row.dataset.catalog;
                 const id = row.dataset.id;
                 App.state.activeCatalogSection = catalogKey;
@@ -495,16 +512,32 @@ App.Render = {
             actions.innerHTML = '';
             this._renderConfigPanel(content);
         } else if (state === 'catalog-editor') {
-            title.textContent = extraData.isNew ? 'Nueva entrada de catálogo' : `Editar: ${extraData.entryId}`;
-            this._renderCatalogEditor(content, extraData);
-            actions.innerHTML = `
-                <button class="btn-save" id="catalog-save-btn">Guardar</button>
-                <button class="btn-duplicate" id="catalog-cancel-btn" style="background:transparent; color:var(--text-secondary); border:1px solid var(--border-medium);">Cancelar</button>
-                ${!extraData.isNew ? `<button class="btn-delete" id="catalog-delete-btn">Eliminar</button>` : ''}
-            `;
-            document.getElementById('catalog-save-btn')?.addEventListener('click', () => App.Interaction.saveCatalogChanges(extraData));
-            document.getElementById('catalog-cancel-btn')?.addEventListener('click', () => App.Interaction.closeSidebar());
-            document.getElementById('catalog-delete-btn')?.addEventListener('click', () => App.Interaction.deleteCatalogFromSidebar(extraData));
+            const isNew = extraData?.isNew;
+            title.textContent = isNew ? 'Nueva entrada de catálogo' : `Detalles: ${extraData.entryId}`;
+            this._renderCatalogEditor(content, extraData, App.state.editMode);
+            actions.innerHTML = '';
+            if (App.state.editMode) {
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'btn-save';
+                saveBtn.textContent = 'Guardar';
+                saveBtn.addEventListener('click', () => App.Interaction.saveCatalogChanges(extraData));
+                actions.appendChild(saveBtn);
+                if (!isNew) {
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn-delete';
+                    delBtn.textContent = 'Eliminar';
+                    delBtn.addEventListener('click', () => App.Interaction.deleteCatalogFromSidebar(extraData));
+                    actions.appendChild(delBtn);
+                }
+            }
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn-duplicate';
+            cancelBtn.style.background = 'transparent';
+            cancelBtn.style.color = 'var(--text-secondary)';
+            cancelBtn.style.border = '1px solid var(--border-medium)';
+            cancelBtn.textContent = 'Cerrar';
+            cancelBtn.addEventListener('click', () => App.Interaction.closeSidebar());
+            actions.appendChild(cancelBtn);
         } else if (state === 'details' && entityId) {
             const result = App.Utils.findEntityById(entityId);
             if (!result) return;
@@ -558,37 +591,45 @@ App.Render = {
         }
     },
 
-    // ─── EDITOR DE CATÁLOGO MEJORADO ───
-    _renderCatalogEditor(container, { catalogKey, entryId, isNew }) {
+    _renderCatalogEditor(container, { catalogKey, entryId, isNew }, editMode) {
         const catalogs = App.state.metadata.catalogs;
         const entry = isNew ? {} : (catalogs[catalogKey]?.[entryId] || {});
+        const disabled = editMode ? '' : 'disabled';
         let html = '<div class="section-title">Información de la entrada</div>';
 
         const addField = (label, fieldWidget) => {
             return `<div class="field-group"><label>${label}</label>${fieldWidget}</div>`;
         };
 
+        if (catalogKey !== 'colorPalette') {
+            if (isNew) {
+                html += addField('ID', `<input type="text" data-field="id" value="" ${disabled}>`);
+            } else {
+                html += addField('ID', `<input type="text" value="${App.Utils.escapeHtml(entryId)}" disabled>`);
+            }
+        }
+
         if (catalogKey === 'people') {
-            html += addField('Nombre', this._renderFieldWidget('name', entry.name || '', null, true));
+            html += addField('Nombre', this._renderFieldWidget('name', entry.name || '', null, editMode));
         } else if (catalogKey === 'sections') {
-            html += addField('Nombre', this._renderFieldWidget('name', entry.name || '', null, true));
+            html += addField('Nombre', this._renderFieldWidget('name', entry.name || '', null, editMode));
         } else if (catalogKey === 'connectorModels') {
-            html += addField('Fabricante', this._renderFieldWidget('manufacturer', entry.manufacturer || '', null, true));
-            html += addField('Nº de parte', this._renderFieldWidget('partNumber', entry.partNumber || '', null, true));
-            html += addField('Pines', this._renderFieldWidget('pins', entry.pins || '', 'number', true));
-            html += addField('Género', this._renderFieldWidget('gender', entry.gender || '', null, true));
+            html += addField('Fabricante', this._renderFieldWidget('manufacturer', entry.manufacturer || '', null, editMode));
+            html += addField('Nº de parte', this._renderFieldWidget('partNumber', entry.partNumber || '', null, editMode));
+            html += addField('Pines', this._renderFieldWidget('pins', entry.pins || '', 'number', editMode));
+            html += addField('Género', this._renderFieldWidget('gender', entry.gender || '', null, editMode));
         } else if (catalogKey === 'wireTypes') {
-            html += addField('Unidad', this._renderFieldWidget('unit', entry.unit || 'mm2', null, true));
-            html += addField('Apantallado', this._renderFieldWidget('shielded', entry.shielded || false, 'boolean', true));
-            html += addField('Aislamiento', this._renderFieldWidget('insulationType', entry.insulationType || '', null, true));
+            html += addField('Unidad', this._renderFieldWidget('unit', entry.unit || 'mm2', null, editMode));
+            html += addField('Apantallado', this._renderFieldWidget('shielded', entry.shielded || false, 'boolean', editMode));
+            html += addField('Aislamiento', this._renderFieldWidget('insulationType', entry.insulationType || '', null, editMode));
         } else if (catalogKey === 'nets') {
-            html += addField('Nombre', this._renderFieldWidget('name', entry.name || '', null, true));
-            html += addField('Tipo de señal', this._renderFieldWidget('signalType', entry.signalType || 'data', null, true));
-            html += addField('Voltaje', this._renderFieldWidget('voltage', entry.voltage || '', null, true));
-            html += addField('Color', this._renderFieldWidget('colorCode', entry.colorCode || '', null, true));
+            html += addField('Nombre', this._renderFieldWidget('name', entry.name || '', null, editMode));
+            html += addField('Tipo de señal', this._renderFieldWidget('signalType', entry.signalType || 'data', null, editMode));
+            html += addField('Voltaje', this._renderFieldWidget('voltage', entry.voltage || '', null, editMode));
+            html += addField('Color', this._renderFieldWidget('colorCode', entry.colorCode || '', null, editMode));
         } else if (catalogKey === 'colorPalette') {
             html += `<div class="field-group"><label>Nombre</label><input type="text" id="catalog-color-name" value="${App.Utils.escapeHtml(entryId || '')}" ${isNew ? '' : 'disabled'}></div>`;
-            html += `<div class="field-group"><label>Color (hex)</label><input type="text" id="catalog-color-hex" value="${App.Utils.escapeHtml(entry || '')}"></div>`;
+            html += `<div class="field-group"><label>Color (hex)</label><input type="text" id="catalog-color-hex" value="${App.Utils.escapeHtml(entry || '')}" ${disabled}></div>`;
         }
         container.innerHTML = html;
     },
@@ -685,6 +726,13 @@ App.Render = {
 
         if (['pins', 'length', 'gauge', 'offset'].includes(field)) {
             return `<input type="number" data-field="${field}" value="${App.Utils.escapeHtml(strValue)}" ${disabled}>`;
+        }
+
+        if (field === 'shielded' || (typeof value === 'boolean')) {
+            return `<select data-field="${field}" ${disabled}>
+                <option value="true" ${strValue === 'true' ? 'selected' : ''}>Sí</option>
+                <option value="false" ${strValue === 'false' ? 'selected' : ''}>No</option>
+            </select>`;
         }
 
         return `<input type="text" data-field="${field}" value="${App.Utils.escapeHtml(strValue)}" ${disabled}>`;
