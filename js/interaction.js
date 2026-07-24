@@ -1,16 +1,17 @@
 /**
  * ArnesViz v2.5 – Módulo de interacción (App.Interaction)
- * Mejoras: setActiveEntityButton para corregir iluminación.
+ * Corrección: eliminada restricción de tamaño mínimo por conectores flying.
+ *              Los flying no están físicamente dentro del contenedor.
  */
 
 App.Interaction = {
     init() {
         this.bindHeaderEvents();
+        this.bindToolbarEvents();
         this.bindTableEvents();
         this.bindSVGEvents();
         this.bindSidebarEvents();
         this.bindLogPanelEvents();
-        this.bindFilterEvents();
         this.bindKeyboardShortcuts();
         this.bindBeforeUnload();
     },
@@ -44,19 +45,42 @@ App.Interaction = {
         document.getElementById('visual-view').classList.toggle('hidden', view !== 'visual');
         document.getElementById('tab-table-btn').classList.toggle('active', view === 'table');
         document.getElementById('tab-visual-btn').classList.toggle('active', view === 'visual');
+
+        this.updateToolbarForView(view);
+        this.updateRouteDropdowns(); // reiniciar dropdowns sin filtro
+
         App.Utils.saveToStorage('arnesviz.activeView', view);
         if (view === 'visual') App.Render.renderSVG();
         else App.Render.renderTable();
     },
 
-    /* ───────── TABLA ───────── */
-    bindTableEvents() {
-        const entityButtons = document.querySelectorAll('#table-toolbar .entity-type-btn');
+    updateToolbarForView(view) {
+        const entityBtns = document.getElementById('toolbar-entity-btns');
+        const counter = document.getElementById('filter-counter');
+        const addBtn = document.getElementById('toolbar-add-btn');
+        const routeFilters = document.getElementById('route-filters');
+
+        if (view === 'visual') {
+            // Ocultar botones de entidad y contador, pero NO el botón añadir
+            if (entityBtns) entityBtns.style.display = 'none';
+            if (counter) counter.style.display = 'none';
+            if (addBtn) addBtn.style.display = ''; // siempre visible
+            if (routeFilters) routeFilters.classList.add('visible');
+        } else {
+            if (entityBtns) entityBtns.style.display = '';
+            if (counter) counter.style.display = '';
+            if (addBtn) addBtn.style.display = '';
+            if (routeFilters) routeFilters.classList.remove('visible');
+        }
+    },
+
+    /* ───────── TOOLBAR UNIFICADO ───────── */
+    bindToolbarEvents() {
+        // Botones de entidad
+        const entityButtons = document.querySelectorAll('#toolbar-entity-btns .entity-type-btn');
         entityButtons.forEach(btn => {
             btn.addEventListener('click', () => {
-                // Limpiar todos los botones
                 entityButtons.forEach(b => b.classList.remove('active'));
-                // Activar el clicado
                 btn.classList.add('active');
                 App.state.activeTableEntity = btn.dataset.entity;
                 if (App.state.activeTableEntity !== 'catalogs') {
@@ -66,27 +90,17 @@ App.Interaction = {
             });
         });
 
-        // Añadir botón de catálogos manualmente
-        const tableToolbar = document.getElementById('table-toolbar');
-        if (tableToolbar && !document.getElementById('table-entity-catalogs')) {
-            const catalogsBtn = document.createElement('button');
-            catalogsBtn.className = 'entity-type-btn';
-            catalogsBtn.id = 'table-entity-catalogs';
-            catalogsBtn.dataset.entity = 'catalogs';
-            catalogsBtn.textContent = '📚 Catálogos';
-            catalogsBtn.addEventListener('click', () => {
-                entityButtons.forEach(b => b.classList.remove('active'));
-                catalogsBtn.classList.add('active');
-                App.state.activeTableEntity = 'catalogs';
-                if (!App.state.activeCatalogSection) {
-                    App.state.activeCatalogSection = 'people';
-                }
-                App.Render.renderTable();
-            });
-            tableToolbar.insertBefore(catalogsBtn, document.getElementById('table-add-btn'));
-        }
+        // Buscador general
+        const searchInput = document.getElementById('filter-search');
+        const applySearch = App.Utils.debounce(() => {
+            App.state.filters.search = searchInput?.value || '';
+            App.Utils.saveToStorage('arnesviz.filters', App.state.filters);
+            App.Render.renderAll();
+        }, 200);
+        searchInput?.addEventListener('input', applySearch);
 
-        document.getElementById('table-add-btn')?.addEventListener('click', () => {
+        // Botón Añadir (siempre visible)
+        document.getElementById('toolbar-add-btn')?.addEventListener('click', () => {
             if (!App.state.editMode) {
                 App.Utils.showToast('Activa el modo edición para añadir entidades', 'warning');
                 return;
@@ -111,6 +125,131 @@ App.Interaction = {
             App.Data.runValidation();
         });
 
+        // Filtros de ruta inteligentes
+        const routeFrom = document.getElementById('route-from');
+        const routeTo = document.getElementById('route-to');
+        const routeNet = document.getElementById('route-net'); // nuevo dropdown de señal
+
+        routeFrom?.addEventListener('change', (e) => {
+            const fromId = e.target.value;
+            App.state.routeFrom = fromId;
+            if (fromId) {
+                const connected = this.getConnectedConnectors(fromId);
+                this.updateRouteDropdowns('to', connected);
+                // Si el destino actual no está conectado, limpiarlo
+                if (App.state.routeTo && !connected.has(App.state.routeTo)) {
+                    routeTo.value = '';
+                    App.state.routeTo = '';
+                }
+            } else {
+                this.updateRouteDropdowns(); // mostrar todos
+            }
+            App.Render.renderSVG();
+        });
+
+        routeTo?.addEventListener('change', (e) => {
+            const toId = e.target.value;
+            App.state.routeTo = toId;
+            if (toId) {
+                const connected = this.getConnectedConnectors(toId);
+                this.updateRouteDropdowns('from', connected);
+                if (App.state.routeFrom && !connected.has(App.state.routeFrom)) {
+                    routeFrom.value = '';
+                    App.state.routeFrom = '';
+                }
+            } else {
+                this.updateRouteDropdowns(); // mostrar todos
+            }
+            App.Render.renderSVG();
+        });
+
+        routeNet?.addEventListener('change', (e) => {
+            App.state.routeNet = e.target.value || ''; // '' = Todas las señales
+            App.Render.renderSVG();
+        });
+    },
+
+    // Devuelve un Set con IDs de conectores conectados directa/indirectamente al conector dado
+    getConnectedConnectors(connectorId) {
+        const connected = new Set();
+        const queue = [connectorId];
+        const visited = new Set();
+        const { wires, mates } = App.state.data;
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (visited.has(current)) continue;
+            visited.add(current);
+            connected.add(current);
+
+            // A través de wires
+            for (const wire of wires) {
+                if (wire.from?.connector === current && wire.to?.connector) {
+                    if (!visited.has(wire.to.connector)) queue.push(wire.to.connector);
+                }
+                if (wire.to?.connector === current && wire.from?.connector) {
+                    if (!visited.has(wire.from.connector)) queue.push(wire.from.connector);
+                }
+            }
+
+            // A través de mates (acoples)
+            for (const mate of mates) {
+                if (mate.from?.connector === current && mate.to?.connector) {
+                    if (!visited.has(mate.to.connector)) queue.push(mate.to.connector);
+                }
+                if (mate.to?.connector === current && mate.from?.connector) {
+                    if (!visited.has(mate.from.connector)) queue.push(mate.from.connector);
+                }
+            }
+        }
+
+        return connected;
+    },
+
+    updateRouteDropdowns(target = 'both', connectedIds = null) {
+        const fromSelect = document.getElementById('route-from');
+        const toSelect = document.getElementById('route-to');
+        const netSelect = document.getElementById('route-net');
+        if (!fromSelect || !toSelect) return;
+
+        const connectors = App.state.data.connectors || [];
+        const allOptions = connectors.map(c => ({
+            id: c.id,
+            label: `${c.id} ${c.name || ''}`
+        }));
+
+        const getFilteredOptions = () => {
+            if (!connectedIds || connectedIds.size === 0) {
+                return allOptions;
+            }
+            return allOptions.filter(opt => connectedIds.has(opt.id));
+        };
+
+        if (target === 'from' || target === 'both') {
+            const options = getFilteredOptions();
+            const currentVal = fromSelect.value;
+            fromSelect.innerHTML = '<option value="">Origen</option>' +
+                options.map(opt => `<option value="${opt.id}" ${currentVal === opt.id ? 'selected' : ''}>${opt.label}</option>`).join('');
+        }
+
+        if (target === 'to' || target === 'both') {
+            const options = getFilteredOptions();
+            const currentVal = toSelect.value;
+            toSelect.innerHTML = '<option value="">Destino</option>' +
+                options.map(opt => `<option value="${opt.id}" ${currentVal === opt.id ? 'selected' : ''}>${opt.label}</option>`).join('');
+        }
+
+        // Actualizar dropdown de señales (nets)
+        if (netSelect && (target === 'both')) {
+            const nets = App.state.metadata?.catalogs?.nets || {};
+            const currentVal = netSelect.value;
+            netSelect.innerHTML = '<option value="">Todas las señales</option>' +
+                Object.keys(nets).map(id => `<option value="${id}" ${currentVal === id ? 'selected' : ''}>${id}</option>`).join('');
+        }
+    },
+
+    /* ───────── TABLA ───────── */
+    bindTableEvents() {
         document.getElementById('data-table-body')?.addEventListener('click', e => {
             if (App.state.inlineEditing) return;
             const row = e.target.closest('tr');
@@ -313,6 +452,7 @@ App.Interaction = {
                     const dy = (e.clientY - dragStart.y) / App.state.zoom;
                     let newW = Math.max(50, (container.size?.width || 100) + dx);
                     let newH = Math.max(50, (container.size?.height || 100) + dy);
+
                     if (container.parent_id) {
                         const parent = App.state.data.containers.find(c => c.id === container.parent_id);
                         if (parent) {
@@ -324,6 +464,11 @@ App.Interaction = {
                             newH = Math.min(newH, ph - oy);
                         }
                     }
+
+                    const minSize = this.getContainerMinSize(container);
+                    newW = Math.max(newW, minSize.minWidth);
+                    newH = Math.max(newH, minSize.minHeight);
+
                     if (!container.size) container.size = {};
                     container.size.width = newW;
                     container.size.height = newH;
@@ -358,6 +503,64 @@ App.Interaction = {
         });
     },
 
+    /* ───────── TAMAÑO MÍNIMO DE CONTENEDOR (CORREGIDO) ───────── */
+    getContainerMinSize(container) {
+        const margin = 1.05;
+        let minWidth = 50;
+        let minHeight = 50;
+
+        // Solo conectores fijos directos
+        const childConnectors = App.state.data.connectors.filter(
+            c => c.parent_id === container.id && c.mountType === 'fixed'
+        );
+        for (const conn of childConnectors) {
+            const cw = conn.size?.width || App.CONST.CONNECTOR_WIDTH;
+            const ch = conn.size?.height || App.CONST.CONNECTOR_HEIGHT;
+            const offset = conn.offset || 0;
+            let reqW, reqH;
+            if (conn.edgeSide === 'left' || conn.edgeSide === 'right') {
+                reqW = cw;
+                reqH = offset + ch;
+            } else { // top o bottom
+                reqW = offset + cw;
+                reqH = ch;
+            }
+            minWidth = Math.max(minWidth, Math.ceil(reqW * margin));
+            minHeight = Math.max(minHeight, Math.ceil(reqH * margin));
+        }
+
+        // Conectores en lados opuestos
+        const leftConnectors = childConnectors.filter(c => c.edgeSide === 'left');
+        const rightConnectors = childConnectors.filter(c => c.edgeSide === 'right');
+        if (leftConnectors.length > 0 && rightConnectors.length > 0) {
+            const maxLeftWidth = Math.max(...leftConnectors.map(c => c.size?.width || App.CONST.CONNECTOR_WIDTH));
+            const maxRightWidth = Math.max(...rightConnectors.map(c => c.size?.width || App.CONST.CONNECTOR_WIDTH));
+            minWidth = Math.max(minWidth, Math.ceil((maxLeftWidth + maxRightWidth) * margin));
+        }
+        const topConnectors = childConnectors.filter(c => c.edgeSide === 'top');
+        const bottomConnectors = childConnectors.filter(c => c.edgeSide === 'bottom');
+        if (topConnectors.length > 0 && bottomConnectors.length > 0) {
+            const maxTopHeight = Math.max(...topConnectors.map(c => c.size?.height || App.CONST.CONNECTOR_HEIGHT));
+            const maxBottomHeight = Math.max(...bottomConnectors.map(c => c.size?.height || App.CONST.CONNECTOR_HEIGHT));
+            minHeight = Math.max(minHeight, Math.ceil((maxTopHeight + maxBottomHeight) * margin));
+        }
+
+        // Contenedores hijos
+        const childContainers = App.state.data.containers.filter(
+            c => c.parent_id === container.id
+        );
+        for (const child of childContainers) {
+            const offsetX = child.position?.offsetX || 0;
+            const offsetY = child.position?.offsetY || 0;
+            const cw = child.size?.width || 100;
+            const ch = child.size?.height || 100;
+            minWidth = Math.max(minWidth, Math.ceil((offsetX + cw) * margin));
+            minHeight = Math.max(minHeight, Math.ceil((offsetY + ch) * margin));
+        }
+
+        return { minWidth, minHeight };
+    },
+
     /* ───────── SIDEBAR ───────── */
     bindSidebarEvents() {
         document.getElementById('sidebar-close-btn')?.addEventListener('click', () => this.closeSidebar());
@@ -366,9 +569,11 @@ App.Interaction = {
     openSidebar(state, entityId = null, extraData = null) {
         const panel = document.getElementById('sidebar-panel');
         if (!panel) return;
+
         App.state.sidebarState = state;
         if (state === 'details' && entityId) App.state.lastDetailEntityId = entityId;
         if (state === 'catalog-editor') App.state.lastCatalogEditorData = extraData;
+
         panel.classList.add('open');
         App.Render.renderSidebar(state, entityId, extraData);
     },
@@ -376,6 +581,7 @@ App.Interaction = {
     closeSidebar() {
         const panel = document.getElementById('sidebar-panel');
         if (panel) panel.classList.remove('open');
+
         App.state.sidebarState = null;
         App.state.lastCatalogEditorData = null;
     },
@@ -549,6 +755,18 @@ App.Interaction = {
         if (logHeader && logPanel) {
             logHeader.addEventListener('click', () => logPanel.classList.toggle('collapsed'));
         }
+        document.getElementById('log-copy-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const logBody = document.getElementById('log-body');
+            if (logBody) {
+                const text = logBody.innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    App.Utils.showToast('Log copiado al portapapeles', 'success');
+                }).catch(() => {
+                    App.Utils.showToast('Error al copiar', 'error');
+                });
+            }
+        });
         document.getElementById('log-filter-errors')?.addEventListener('click', e => { e.stopPropagation(); App.state.logShowErrors = !App.state.logShowErrors; this.updateLogPanel(); });
         document.getElementById('log-filter-warnings')?.addEventListener('click', e => { e.stopPropagation(); App.state.logShowWarnings = !App.state.logShowWarnings; this.updateLogPanel(); });
         document.getElementById('log-filter-info')?.addEventListener('click', e => { e.stopPropagation(); App.state.logShowInfo = !App.state.logShowInfo; this.updateLogPanel(); });
@@ -589,52 +807,6 @@ App.Interaction = {
         logBody.scrollTop = logBody.scrollHeight;
     },
 
-    /* ───────── FILTROS ───────── */
-    bindFilterEvents() {
-        const searchInput = document.getElementById('filter-search');
-        const typeSelect = document.getElementById('filter-type');
-        const netSelect = document.getElementById('filter-net');
-        const sectionSelect = document.getElementById('filter-section');
-        const clearBtn = document.getElementById('clear-filters-btn');
-
-        const applyFilters = App.Utils.debounce(() => {
-            App.state.filters.search = searchInput?.value || '';
-            App.state.filters.type = typeSelect?.value || 'all';
-            App.state.filters.net = netSelect?.value || 'all';
-            App.state.filters.section = sectionSelect?.value || 'all';
-            App.Utils.saveToStorage('arnesviz.filters', App.state.filters);
-            App.Render.renderAll();
-        }, 200);
-
-        searchInput?.addEventListener('input', applyFilters);
-        typeSelect?.addEventListener('change', applyFilters);
-        netSelect?.addEventListener('change', applyFilters);
-        sectionSelect?.addEventListener('change', applyFilters);
-        clearBtn?.addEventListener('click', () => {
-            if (searchInput) searchInput.value = '';
-            if (typeSelect) typeSelect.value = 'all';
-            if (netSelect) netSelect.value = 'all';
-            if (sectionSelect) sectionSelect.value = 'all';
-            applyFilters();
-        });
-
-        this.updateFilterDropdowns();
-    },
-
-    updateFilterDropdowns() {
-        const catalogs = App.state.metadata?.catalogs || {};
-        const netSelect = document.getElementById('filter-net');
-        const sectionSelect = document.getElementById('filter-section');
-        if (netSelect) {
-            netSelect.innerHTML = '<option value="all">Todas las redes</option>' +
-                Object.keys(catalogs.nets || {}).map(id => `<option value="${id}">${id}</option>`).join('');
-        }
-        if (sectionSelect) {
-            sectionSelect.innerHTML = '<option value="all">Todas las secciones</option>' +
-                Object.keys(catalogs.sections || {}).map(id => `<option value="${id}">${catalogs.sections[id].name}</option>`).join('');
-        }
-    },
-
     /* ───────── IMPORT / EXPORT / DELETE ALL ───────── */
     async importJSON() {
         const input = document.createElement('input');
@@ -660,9 +832,9 @@ App.Interaction = {
             if (success) {
                 App.Data.runValidation();
                 App.Render.renderAll();
-                this.updateFilterDropdowns();
                 this.closeSidebar();
                 App.state.selectedEntityId = null;
+                this.updateRouteDropdowns();
             }
         };
         input.click();
@@ -734,13 +906,12 @@ App.Interaction = {
         document.getElementById('tab-table-btn').classList.toggle('active', savedView === 'table');
         document.getElementById('tab-visual-btn').classList.toggle('active', savedView === 'visual');
 
+        this.updateToolbarForView(savedView);
+
         const savedFilters = App.Utils.loadFromStorage('arnesviz.filters');
         if (savedFilters) {
             App.state.filters = savedFilters;
             document.getElementById('filter-search').value = savedFilters.search || '';
-            document.getElementById('filter-type').value = savedFilters.type || 'all';
-            document.getElementById('filter-net').value = savedFilters.net || 'all';
-            document.getElementById('filter-section').value = savedFilters.section || 'all';
         }
 
         App.state.zoom = App.Utils.loadFromStorage('arnesviz.zoom', 1);
@@ -758,7 +929,6 @@ App.Interaction = {
                 if (success) {
                     App.Data.runValidation();
                     App.Render.renderAll();
-                    this.updateFilterDropdowns();
                 }
             } else {
                 await App.Data.checkAutosave();
@@ -782,12 +952,13 @@ App.Interaction = {
             }
         }
 
+        this.updateRouteDropdowns();
+
         App.state.autosaveTimer = setInterval(() => {
             if (App.state.isDirty) App.Data.autosave();
         }, App.CONST.AUTOSAVE_INTERVAL);
 
         App.Render.renderAll();
-        this.updateFilterDropdowns();
         console.log('ArnesViz v2.5 inicializado con mejoras UX.');
     }
 };
