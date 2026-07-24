@@ -1,8 +1,9 @@
 /**
  * ArnesViz v2.5 – Módulo de datos (App.Data)
  * Carga, guardado, validación, creación/eliminación de entidades,
- * autocomplete, cálculo de posiciones, referencias de catálogos
- * y manipulación de catálogos.
+ * autocomplete, cálculo de posiciones, referencias de catálogos,
+ * manipulación de catálogos, duplicación inteligente,
+ * y búsqueda de rutas entre conectores (con filtro de señal).
  */
 
 App.Data = {
@@ -386,6 +387,38 @@ App.Data = {
         entity.id = newId;
         Object.assign(entity, overrides);
         entity = this.autocompleteEntity(entity, type);
+
+        if (type === 'connector' && !entity.matedId && !overrides.matedId) {
+            const complement = App.Utils.clone(cfg.template);
+            const complementExistingIds = [...existingIds, newId];
+            complement.id = App.Utils.generateId('C', complementExistingIds);
+            complement.mountType = entity.mountType === 'fixed' ? 'flying' : 'fixed';
+            complement.gender = entity.gender === 'male' ? 'female' : 'male';
+            const oppositeEdge = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
+            complement.edgeSide = oppositeEdge[entity.edgeSide] || 'left';
+            complement.parent_id = entity.parent_id;
+            complement.pins = entity.pins;
+            complement.size = entity.size ? App.Utils.clone(entity.size) : { width: App.CONST.CONNECTOR_WIDTH, height: App.CONST.CONNECTOR_HEIGHT };
+            complement.offset = entity.offset || 50;
+            complement = this.autocompleteEntity(complement, 'connector');
+            App.state.data.connectors.push(complement);
+
+            const mateTemplate = map['mate'].template;
+            const mateExistingIds = App.state.data.mates.map(e => e.id);
+            const newMate = App.Utils.clone(mateTemplate);
+            newMate.id = App.Utils.generateId('M', mateExistingIds);
+            newMate.from = { connector: entity.mountType === 'fixed' ? newId : complement.id, pin: 1 };
+            newMate.to = { connector: entity.mountType === 'fixed' ? complement.id : newId, pin: 1 };
+            newMate.net = entity.net || null;
+            newMate.pinMapping = 'direct';
+            App.state.data.mates.push(newMate);
+
+            entity.matedId = newMate.id;
+            complement.matedId = newMate.id;
+
+            App.Utils.addLog('info', `Creada pareja automática: ${newId} ↔ ${complement.id} (${newMate.id})`);
+        }
+
         App.state.data[cfg.array].push(entity);
         App.state.isDirty = true;
         App.Utils.addLog('info', `Creado ${type} ${newId}`);
@@ -411,6 +444,77 @@ App.Data = {
         const prefix = id.charAt(0);
         const existingIds = App.state.data[arrayName].map(e => e.id);
         copy.id = App.Utils.generateId(prefix, existingIds);
+
+        if (type === 'connector') {
+            copy.matedId = null;
+            if (original.matedId) {
+                const originalMate = App.state.data.mates.find(m => m.id === original.matedId);
+                if (originalMate) {
+                    const partnerId = originalMate.from.connector === original.id ? originalMate.to.connector : originalMate.from.connector;
+                    const partnerConn = App.state.data.connectors.find(c => c.id === partnerId);
+                    if (partnerConn) {
+                        const partnerCopy = App.Utils.clone(partnerConn);
+                        const partnerExistingIds = [...App.state.data.connectors.map(e => e.id), copy.id];
+                        partnerCopy.id = App.Utils.generateId('C', partnerExistingIds);
+                        partnerCopy.matedId = null;
+                        App.state.data.connectors.push(partnerCopy);
+
+                        const newMate = App.Utils.clone(originalMate);
+                        const mateExistingIds = App.state.data.mates.map(e => e.id);
+                        newMate.id = App.Utils.generateId('M', mateExistingIds);
+                        if (originalMate.from.connector === original.id) {
+                            newMate.from = { connector: copy.id, pin: originalMate.from.pin };
+                            newMate.to = { connector: partnerCopy.id, pin: originalMate.to.pin };
+                        } else {
+                            newMate.from = { connector: partnerCopy.id, pin: originalMate.from.pin };
+                            newMate.to = { connector: copy.id, pin: originalMate.to.pin };
+                        }
+                        App.state.data.mates.push(newMate);
+
+                        copy.matedId = newMate.id;
+                        partnerCopy.matedId = newMate.id;
+
+                        App.Utils.addLog('info', `Duplicado acople ${originalMate.id} -> ${newMate.id} (${partnerCopy.id} ↔ ${copy.id})`);
+                    } else {
+                        App.Utils.addLog('warning', `No se encontró el conector compañero de ${original.id} para duplicar el acople.`);
+                    }
+                }
+            }
+        } else if (type === 'mate') {
+            const fromConn = App.state.data.connectors.find(c => c.id === original.from?.connector);
+            const toConn = App.state.data.connectors.find(c => c.id === original.to?.connector);
+            if (fromConn && toConn) {
+                const fromCopy = App.Utils.clone(fromConn);
+                const toCopy = App.Utils.clone(toConn);
+                const connExistingIds = [...App.state.data.connectors.map(e => e.id)];
+                fromCopy.id = App.Utils.generateId('C', connExistingIds);
+                connExistingIds.push(fromCopy.id);
+                toCopy.id = App.Utils.generateId('C', connExistingIds);
+                fromCopy.matedId = null;
+                toCopy.matedId = null;
+                App.state.data.connectors.push(fromCopy, toCopy);
+
+                const newMate = App.Utils.clone(original);
+                const mateExistingIds = App.state.data.mates.map(e => e.id);
+                newMate.id = App.Utils.generateId('M', mateExistingIds);
+                newMate.from = { connector: fromCopy.id, pin: original.from.pin };
+                newMate.to = { connector: toCopy.id, pin: original.to.pin };
+                App.state.data.mates.push(newMate);
+
+                fromCopy.matedId = newMate.id;
+                toCopy.matedId = newMate.id;
+
+                App.Utils.addLog('info', `Duplicado M ${original.id} -> ${newMate.id} con conectores ${fromCopy.id} y ${toCopy.id}`);
+            } else {
+                copy.from = { connector: null, pin: 1 };
+                copy.to = { connector: null, pin: 1 };
+                App.Utils.addLog('warning', `No se encontraron los conectores del M ${original.id}; se creó un M vacío.`);
+            }
+        } else if (type === 'wire') {
+            copy.from = { connector: null, pin: 1 };
+            copy.to = { connector: null, pin: 1 };
+        }
+
         App.state.data[arrayName].push(copy);
         App.state.isDirty = true;
         App.Utils.addLog('info', `Duplicado ${type} ${id} -> ${copy.id}`);
@@ -503,7 +607,6 @@ App.Data = {
         return { x, y };
     },
 
-    // getPinPosition mejorado: para flying, deriva la orientación de la pareja fixed
     getPinPosition(connectorId, pinNumber, side = 'front') {
         const conn = App.state.data.connectors.find(c => c.id === connectorId);
         if (!conn || !conn.pins) return null;
@@ -513,25 +616,21 @@ App.Data = {
         const h = conn.size?.height || App.CONST.CONNECTOR_HEIGHT;
         const totalPins = conn.pins;
 
-        // Determinar el lado efectivo para este conector
         let effectiveEdge;
         if (conn.mountType === 'flying') {
-            // Buscar la pareja fixed
             const mate = App.state.data.mates.find(m => m.id === conn.matedId);
             if (mate) {
                 const partnerId = mate.from.connector === conn.id ? mate.to.connector : mate.from.connector;
                 const partner = App.state.data.connectors.find(c => c.id === partnerId);
                 if (partner) {
-                    // El lado frontal del flying es el opuesto al edgeSide del fixed
                     effectiveEdge = side === 'front' ? this._oppositeEdge(partner.edgeSide) : partner.edgeSide;
                 } else {
-                    effectiveEdge = conn.edgeSide; // fallback
+                    effectiveEdge = conn.edgeSide;
                 }
             } else {
-                effectiveEdge = conn.edgeSide; // fallback
+                effectiveEdge = conn.edgeSide;
             }
         } else {
-            // Para fixed, usar su propio edgeSide
             effectiveEdge = side === 'back' ? this._oppositeEdge(conn.edgeSide) : conn.edgeSide;
         }
 
@@ -595,7 +694,6 @@ App.Data = {
         return refs;
     },
 
-    // ─── Manipulación de catálogos ───
     createCatalogEntry(catalogKey, entryId, data) {
         const catalogs = App.state.metadata.catalogs;
         if (!catalogs[catalogKey]) catalogs[catalogKey] = {};
@@ -609,9 +707,8 @@ App.Data = {
     updateCatalogEntry(catalogKey, entryId, newData) {
         const catalogs = App.state.metadata.catalogs;
         if (!catalogs[catalogKey] || !catalogs[catalogKey][entryId]) return false;
-        // Merge o reemplazo según el tipo
         if (catalogKey === 'colorPalette') {
-            catalogs[catalogKey][entryId] = newData; // string
+            catalogs[catalogKey][entryId] = newData;
         } else {
             Object.assign(catalogs[catalogKey][entryId], newData);
         }
@@ -622,12 +719,92 @@ App.Data = {
 
     deleteCatalogEntry(catalogKey, entryId) {
         const refs = this.getCatalogReferences(catalogKey, entryId);
-        if (refs.length > 0) return false; // no se puede eliminar
+        if (refs.length > 0) return false;
         const catalogs = App.state.metadata.catalogs;
         if (!catalogs[catalogKey] || !catalogs[catalogKey][entryId]) return false;
         delete catalogs[catalogKey][entryId];
         App.state.isDirty = true;
         App.Utils.addLog('info', `Entrada ${entryId} eliminada de ${catalogKey}`);
         return true;
+    },
+
+    // ─── Búsqueda de rutas ───
+    /**
+     * Devuelve los IDs de conectores, wires y mates que están en algún camino
+     * entre fromId y toId, respetando opcionalmente un filtro de señal.
+     * @param {string} fromId - ID del conector origen
+     * @param {string} toId - ID del conector destino
+     * @param {string} [netFilter] - ID de la señal (net) a filtrar, o vacío para todas
+     * @returns {{ connectorIds: Set<string>, wireIds: Set<string>, mateIds: Set<string> }}
+     */
+    getPathElements(fromId, toId, netFilter = '') {
+        const forward = this._bfsCollect(fromId, netFilter);
+        const backward = this._bfsCollect(toId, netFilter);
+
+        // Intersección de conjuntos
+        const connectorIds = new Set([...forward.connectorIds].filter(id => backward.connectorIds.has(id)));
+        const wireIds = new Set([...forward.wireIds].filter(id => backward.wireIds.has(id)));
+        const mateIds = new Set([...forward.mateIds].filter(id => backward.mateIds.has(id)));
+
+        return { connectorIds, wireIds, mateIds };
+    },
+
+    /**
+     * Realiza un BFS desde un conector dado, recolectando todos los conectores,
+     * wires y mates alcanzables respetando el filtro de señal.
+     * @param {string} startId - ID del conector de inicio
+     * @param {string} netFilter - ID de la señal a filtrar (vacío = todas)
+     * @returns {{ connectorIds: Set<string>, wireIds: Set<string>, mateIds: Set<string> }}
+     */
+    _bfsCollect(startId, netFilter) {
+        const connectorIds = new Set();
+        const wireIds = new Set();
+        const mateIds = new Set();
+        const queue = [startId];
+        const visitedConnectors = new Set();
+        const { wires, mates } = App.state.data;
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (visitedConnectors.has(current)) continue;
+            visitedConnectors.add(current);
+            connectorIds.add(current);
+
+            // Explorar wires conectados al conector actual
+            for (const wire of wires) {
+                if (netFilter && wire.net !== netFilter) continue;
+                if (wire.from?.connector === current && wire.to?.connector) {
+                    wireIds.add(wire.id);
+                    if (!visitedConnectors.has(wire.to.connector)) {
+                        queue.push(wire.to.connector);
+                    }
+                }
+                if (wire.to?.connector === current && wire.from?.connector) {
+                    wireIds.add(wire.id);
+                    if (!visitedConnectors.has(wire.from.connector)) {
+                        queue.push(wire.from.connector);
+                    }
+                }
+            }
+
+            // Explorar mates conectados al conector actual
+            for (const mate of mates) {
+                if (netFilter && mate.net !== netFilter) continue;
+                if (mate.from?.connector === current && mate.to?.connector) {
+                    mateIds.add(mate.id);
+                    if (!visitedConnectors.has(mate.to.connector)) {
+                        queue.push(mate.to.connector);
+                    }
+                }
+                if (mate.to?.connector === current && mate.from?.connector) {
+                    mateIds.add(mate.id);
+                    if (!visitedConnectors.has(mate.from.connector)) {
+                        queue.push(mate.from.connector);
+                    }
+                }
+            }
+        }
+
+        return { connectorIds, wireIds, mateIds };
     }
 };
