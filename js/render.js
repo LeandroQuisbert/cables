@@ -1,6 +1,7 @@
 /**
  * ArnesViz v2.5 – Módulo de renderizado (App.Render)
- * Mejoras: setActiveEntityButton, expansión de tablas de catálogos.
+ * Mejoras: renderizado de rutas completas con filtro de señal,
+ *          "Señales" primero en catálogos, buscador general.
  */
 
 App.Render = {
@@ -19,9 +20,8 @@ App.Render = {
         this.renderSVG();
     },
 
-    // Activa el botón de la entidad activa en la barra de herramientas
     setActiveEntityButton(entity) {
-        const buttons = document.querySelectorAll('#table-toolbar .entity-type-btn');
+        const buttons = document.querySelectorAll('#toolbar-entity-btns .entity-type-btn');
         buttons.forEach(btn => {
             if (btn.dataset.entity === entity) {
                 btn.classList.add('active');
@@ -50,28 +50,54 @@ App.Render = {
         viewport.appendChild(wiresGroup);
         viewport.appendChild(selectionGroup);
 
+        // Determinar si hay filtro de ruta activo
+        const routeFrom = App.state.routeFrom || '';
+        const routeTo = App.state.routeTo || '';
+        const routeNet = App.state.routeNet || ''; // '' = todas las señales
+        const routeActive = routeFrom && routeTo;
+
+        let routeData = null;
+        if (routeActive) {
+            routeData = App.Data.getPathElements(routeFrom, routeTo, routeNet);
+        }
+
+        // Renderizar contenedores que contengan conectores relevantes (o todos si no hay ruta)
         const sortedContainers = [...data.containers].sort((a, b) => this._getDepth(a.id) - this._getDepth(b.id));
         for (const container of sortedContainers) {
+            if (routeData) {
+                const relevant = data.connectors.some(
+                    c => c.parent_id === container.id && routeData.connectorIds.has(c.id)
+                );
+                // Siempre mostrar T100 (raíz) aunque no tenga conectores directos
+                if (!relevant && container.parent_id !== null) continue;
+            }
             this.renderContainer(container, containersGroup);
         }
 
+        // Determinar conectores volantes con pareja válida (para dibujarlos)
         const validFlyingIds = new Set();
         for (const mate of data.mates) {
+            if (routeData && !routeData.mateIds.has(mate.id)) continue;
             const fromConn = data.connectors.find(c => c.id === mate.from?.connector);
             const toConn = data.connectors.find(c => c.id === mate.to?.connector);
             if (fromConn?.mountType === 'flying') validFlyingIds.add(fromConn.id);
             if (toConn?.mountType === 'flying') validFlyingIds.add(toConn.id);
         }
 
+        // Renderizar conectores
         for (const conn of data.connectors) {
+            if (routeData && !routeData.connectorIds.has(conn.id)) continue;
             if (conn.mountType === 'flying' && !validFlyingIds.has(conn.id)) continue;
             this.renderConnector(conn, connectorsGroup);
         }
 
+        // Renderizar wires
         for (const wire of data.wires) {
+            if (routeData && !routeData.wireIds.has(wire.id)) continue;
             this.renderWire(wire, wiresGroup);
         }
 
+        // Renderizar selección
         if (App.state.selectedEntityId) {
             this.renderSelection(selectionGroup);
         }
@@ -230,22 +256,34 @@ App.Render = {
         const strokeColor = colorPalette[wire.color] || App.CONST.DEFAULT_COLOR;
         const x1 = fromPinPos.x, y1 = fromPinPos.y;
         const x2 = toPinPos.x, y2 = toPinPos.y;
+
+        const getOutwardDirection = (pinPos, connectorId) => {
+            const conn = App.state.data.connectors.find(c => c.id === connectorId);
+            if (!conn) return { dx: 0, dy: 0 };
+            const connPos = App.Data.getConnectorAbsolutePosition(connectorId);
+            if (!connPos) return { dx: 0, dy: 0 };
+            const connCenterX = connPos.x + (conn.size?.width || App.CONST.CONNECTOR_WIDTH) / 2;
+            const connCenterY = connPos.y + (conn.size?.height || App.CONST.CONNECTOR_HEIGHT) / 2;
+            const dx = pinPos.x - connCenterX;
+            const dy = pinPos.y - connCenterY;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 1) return { dx: 0, dy: 0 };
+            return { dx: dx / len, dy: dy / len };
+        };
+
+        const fromDir = getOutwardDirection(fromPinPos, wire.from?.connector);
+        const toDir = getOutwardDirection(toPinPos, wire.to?.connector);
+
         const dx = Math.abs(x2 - x1) * 0.4;
         const cx = Math.max(50, dx);
-        const fromConn = App.state.data.connectors.find(c => c.id === wire.from.connector);
-        const toConn = App.state.data.connectors.find(c => c.id === wire.to.connector);
-        let cx1 = x1, cx2 = x2;
-        if (fromConn) {
-            if (fromConn.edgeSide === 'right') cx1 = x1 + cx;
-            else if (fromConn.edgeSide === 'left') cx1 = x1 - cx;
-        }
-        if (toConn) {
-            if (toConn.edgeSide === 'right') cx2 = x2 + cx;
-            else if (toConn.edgeSide === 'left') cx2 = x2 - cx;
-        }
+
+        const cx1 = x1 + fromDir.dx * cx;
+        const cy1 = y1 + fromDir.dy * cx;
+        const cx2 = x2 + toDir.dx * cx;
+        const cy2 = y2 + toDir.dy * cx;
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const d = `M ${x1},${y1} C ${cx1},${y1} ${cx2},${y2} ${x2},${y2}`;
+        const d = `M ${x1},${y1} C ${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`;
         path.setAttribute('d', d);
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke', strokeColor);
@@ -306,7 +344,6 @@ App.Render = {
         const tableWrapper = document.getElementById('table-wrapper');
         if (!tableWrapper) return;
 
-        // Actualizar botón activo en la barra
         this.setActiveEntityButton(App.state.activeTableEntity);
 
         if (App.state.activeTableEntity === 'catalogs') {
@@ -327,22 +364,14 @@ App.Render = {
 
         const activeEntity = App.state.activeTableEntity || 'containers';
         const dataArray = App.state.data[activeEntity] || [];
-        const filters = App.state.filters;
+        const search = (App.state.filters.search || '').toLowerCase();
 
         const filtered = dataArray.filter(entity => {
-            if (filters.search) {
-                const s = filters.search.toLowerCase();
-                if (!entity.id?.toLowerCase().includes(s) &&
-                    !entity.name?.toLowerCase().includes(s) &&
-                    !entity.designator?.toLowerCase().includes(s)) return false;
-            }
-            if (filters.type !== 'all' && activeEntity !== filters.type) return false;
-            if (filters.net !== 'all' && entity.net && entity.net !== filters.net) return false;
-            if (filters.section !== 'all') {
-                let section = null;
-                if (activeEntity === 'containers') section = entity.sectionRef;
-                else if (activeEntity === 'connectors') section = App.Data.getConnectorSection(entity.id);
-                if (section !== filters.section) return false;
+            if (search) {
+                const idMatch = entity.id?.toLowerCase().includes(search);
+                const nameMatch = entity.name?.toLowerCase().includes(search);
+                const desMatch = entity.designator?.toLowerCase().includes(search);
+                if (!idMatch && !nameMatch && !desMatch) return false;
             }
             return true;
         });
@@ -391,12 +420,14 @@ App.Render = {
         const catalogs = App.state.metadata?.catalogs || {};
         if (!App.state.expandedCatalogs) App.state.expandedCatalogs = new Set();
 
+        const search = (App.state.filters.search || '').toLowerCase();
+
         const catalogDefs = [
+            { key: 'nets', title: 'Señales', columns: ['id', 'name', 'signalType', 'voltage', 'colorCode'] },
             { key: 'people', title: 'Personas', columns: ['id', 'name'] },
             { key: 'sections', title: 'Secciones', columns: ['id', 'name'] },
             { key: 'connectorModels', title: 'Modelos de conectores', columns: ['id', 'name', 'manufacturer', 'partNumber', 'pins', 'gender'] },
             { key: 'wireTypes', title: 'Tipos de cable', columns: ['id', 'unit', 'shielded', 'insulationType'] },
-            { key: 'nets', title: 'Redes', columns: ['id', 'name', 'signalType', 'voltage', 'colorCode'] },
             { key: 'colorPalette', title: 'Paleta de colores', columns: ['name', 'hex'] }
         ];
 
@@ -405,7 +436,15 @@ App.Render = {
         let html = '';
         for (const def of catalogDefs) {
             const data = catalogs[def.key] || {};
-            const entries = Object.entries(data);
+            let entries = Object.entries(data);
+
+            if (search) {
+                entries = entries.filter(([id, entry]) => {
+                    const name = (typeof entry === 'object' ? (entry.name || id) : id).toLowerCase();
+                    return id.toLowerCase().includes(search) || name.includes(search);
+                });
+            }
+
             const isActive = def.key === activeSection;
             const isExpanded = App.state.expandedCatalogs.has(def.key);
             html += `<div class="catalog-section" data-catalog="${def.key}" style="margin-bottom: 8px; border: 1px solid ${isActive ? 'var(--accent-primary)' : 'var(--border-subtle)'}; border-radius: var(--radius-md); overflow: hidden; width: 100%;">`;
@@ -413,7 +452,6 @@ App.Render = {
                 <span style="font-size:13px; font-weight:600; flex:1;">${def.title} (${entries.length})</span>
                 <span class="accordion-arrow" style="transition:transform 0.2s;">▼</span>
             </div>`;
-            // Eliminado max-height y overflow-y: auto para permitir expansión total
             html += `<div class="catalog-section-body" style="display:${isExpanded ? 'block' : 'none'}; width: 100%;">`;
             if (entries.length === 0) {
                 html += '<div style="font-size:11px; color:var(--text-muted); padding:12px;">Vacío</div>';
