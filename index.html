@@ -246,22 +246,22 @@
             position: relative;
         }
 
-        /* ========== TOOLBAR / FILTER BAR ========== */
+        /* ========== TOOLBAR UNIFICADO ========== */
         #toolbar {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 14px;
+            gap: 8px;
+            padding: 6px 14px;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-subtle);
-            flex-wrap: wrap;
-            min-height: 44px;
+            min-height: 42px;
             z-index: 50;
             flex-shrink: 0;
+            flex-wrap: nowrap;
         }
 
         #toolbar input[type="text"] {
-            padding: 7px 12px;
+            padding: 6px 12px;
             border-radius: var(--radius-xl);
             border: 1px solid var(--border-medium);
             background: var(--bg-tertiary);
@@ -269,7 +269,7 @@
             font-size: 13px;
             outline: none;
             transition: var(--transition-fast);
-            width: 180px;
+            width: 200px;
             box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), inset -2px -2px 4px var(--shadow-inset-light);
         }
 
@@ -278,42 +278,35 @@
             box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), 0 0 0 2px var(--accent-glow);
         }
 
-        #toolbar select {
-            padding: 7px 28px 7px 10px;
-            border-radius: var(--radius-xl);
-            border: 1px solid var(--border-medium);
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            font-size: 13px;
-            cursor: pointer;
-            outline: none;
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 8px center;
-            box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), inset -2px -2px 4px var(--shadow-inset-light);
-            transition: var(--transition-fast);
+        #toolbar .toolbar-entity-btns {
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
-        #toolbar select:focus {
-            border-color: var(--accent-primary);
-        }
-
-        #toolbar .clear-filters-btn {
-            padding: 7px 14px;
+        #toolbar .toolbar-entity-btns .entity-type-btn {
+            padding: 5px 10px;
             border-radius: var(--radius-xl);
-            border: 1px solid var(--border-medium);
+            border: 1px solid var(--border-subtle);
             background: transparent;
             color: var(--text-secondary);
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
             transition: var(--transition-fast);
+            font-weight: 500;
+            white-space: nowrap;
         }
 
-        #toolbar .clear-filters-btn:hover {
+        #toolbar .toolbar-entity-btns .entity-type-btn.active {
+            background: var(--accent-primary);
+            color: #fff;
+            border-color: var(--accent-primary);
+            box-shadow: 0 2px 8px var(--accent-glow);
+        }
+
+        #toolbar .toolbar-entity-btns .entity-type-btn:hover:not(.active) {
+            border-color: var(--border-medium);
             color: var(--text-primary);
-            border-color: var(--text-muted);
             background: rgba(255, 255, 255, 0.03);
         }
 
@@ -324,7 +317,56 @@
             margin-left: auto;
         }
 
-        /* ========== CONTENT AREA (Row: main view + sidebar) ========== */
+        #toolbar .add-btn {
+            padding: 6px 14px;
+            border-radius: var(--radius-xl);
+            border: none;
+            background: var(--accent-primary);
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: var(--transition-fast);
+            box-shadow: 0 2px 8px var(--accent-glow);
+            white-space: nowrap;
+            margin-left: 4px;
+        }
+
+        #toolbar .add-btn:hover {
+            background: var(--accent-primary-dark);
+            box-shadow: 0 4px 14px var(--accent-glow);
+        }
+
+        /* Filtros de ruta (solo en vista visual) */
+        #route-filters {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            margin-left: 8px;
+        }
+
+        #route-filters.visible {
+            display: flex;
+        }
+
+        #route-filters select {
+            padding: 6px 24px 6px 8px;
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border-medium);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 12px;
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+            box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), inset -2px -2px 4px var(--shadow-inset-light);
+        }
+
+        /* ========== CONTENT AREA ========== */
         #content-area {
             flex: 1;
             display: flex;
@@ -333,7 +375,6 @@
             position: relative;
         }
 
-        /* Wrapper for table and visual views */
         #main-view {
             flex: 1;
             display: flex;
@@ -349,71 +390,18 @@
             flex-direction: column;
             overflow: hidden;
             background: var(--bg-primary);
+            min-height: 0;
         }
 
         #table-view.hidden {
             display: none;
         }
 
-        #table-toolbar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 14px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-subtle);
-            flex-wrap: wrap;
-            flex-shrink: 0;
-        }
-
-        #table-toolbar .entity-type-btn {
-            padding: 5px 12px;
-            border-radius: var(--radius-xl);
-            border: 1px solid var(--border-subtle);
-            background: transparent;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 12px;
-            transition: var(--transition-fast);
-            font-weight: 500;
-        }
-
-        #table-toolbar .entity-type-btn.active {
-            background: var(--accent-primary);
-            color: #fff;
-            border-color: var(--accent-primary);
-            box-shadow: 0 2px 8px var(--accent-glow);
-        }
-
-        #table-toolbar .entity-type-btn:hover:not(.active) {
-            border-color: var(--border-medium);
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        #table-toolbar .add-btn {
-            padding: 5px 14px;
-            border-radius: var(--radius-xl);
-            border: none;
-            background: var(--accent-primary);
-            color: #fff;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            transition: var(--transition-fast);
-            box-shadow: 0 2px 8px var(--accent-glow);
-            margin-left: auto;
-        }
-
-        #table-toolbar .add-btn:hover {
-            background: var(--accent-primary-dark);
-            box-shadow: 0 4px 14px var(--accent-glow);
-        }
-
         #table-wrapper {
             flex: 1;
             overflow: auto;
             padding: 4px;
+            min-height: 0;
         }
 
         #data-table {
@@ -492,13 +480,14 @@
             outline: none;
         }
 
-        /* ========== VISUAL VIEW (SVG CANVAS) ========== */
+        /* ========== VISUAL VIEW ========== */
         #visual-view {
             flex: 1;
             display: flex;
             overflow: hidden;
             background: var(--bg-primary);
             position: relative;
+            min-height: 0;
         }
 
         #visual-view.hidden {
@@ -520,219 +509,20 @@
             cursor: grabbing;
         }
 
-        #svg-canvas.editing .draggable {
-            cursor: move;
-        }
-
-        #svg-canvas.editing .resizable {
-            cursor: nwse-resize;
-        }
-
-        /* ========== SIDEBAR PANEL (now part of flow) ========== */
-        #sidebar-panel {
-            width: 0;
-            min-width: 0;
-            background: var(--bg-secondary);
-            border-left: 1px solid var(--border-subtle);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transition: width var(--transition-normal);
-            z-index: 100;
-            flex-shrink: 0;
-        }
-
-        #sidebar-panel.open {
-            width: var(--sidebar-width);
-        }
-
-        #sidebar-panel .sidebar-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-subtle);
-            min-height: 48px;
-            flex-shrink: 0;
-        }
-
-        #sidebar-panel .sidebar-header h3 {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text-primary);
-            letter-spacing: -0.2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        #sidebar-panel .sidebar-header .close-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: none;
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition-fast);
-            box-shadow: 2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light);
-            flex-shrink: 0;
-        }
-
-        #sidebar-panel .sidebar-header .close-btn:hover {
-            color: var(--error);
-            box-shadow: 1px 1px 2px var(--shadow-dark), -1px -1px 2px var(--shadow-light);
-        }
-
-        #sidebar-panel .sidebar-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px;
-        }
-
-        #sidebar-panel .sidebar-content .field-group {
-            margin-bottom: 14px;
-        }
-
-        #sidebar-panel .sidebar-content .field-group label {
-            display: block;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-        }
-
-        #sidebar-panel .sidebar-content .field-group input,
-        #sidebar-panel .sidebar-content .field-group select,
-        #sidebar-panel .sidebar-content .field-group textarea {
-            width: 100%;
-            padding: 8px 12px;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border-medium);
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            font-size: 13px;
-            outline: none;
-            transition: var(--transition-fast);
-            box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), inset -2px -2px 4px var(--shadow-inset-light);
-            font-family: var(--font-sans);
-        }
-
-        #sidebar-panel .sidebar-content .field-group input:focus,
-        #sidebar-panel .sidebar-content .field-group select:focus,
-        #sidebar-panel .sidebar-content .field-group textarea:focus {
-            border-color: var(--accent-primary);
-            box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), 0 0 0 2px var(--accent-glow);
-        }
-
-        #sidebar-panel .sidebar-content .field-group input:disabled,
-        #sidebar-panel .sidebar-content .field-group select:disabled,
-        #sidebar-panel .sidebar-content .field-group textarea:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            background: var(--bg-secondary);
-        }
-
-        #sidebar-panel .sidebar-content .field-group textarea {
-            min-height: 70px;
-            resize: vertical;
-        }
-
-        #sidebar-panel .sidebar-content .section-title {
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--accent-yellow);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin: 20px 0 10px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-
-        #sidebar-panel .sidebar-actions {
-            padding: 12px 16px;
-            border-top: 1px solid var(--border-subtle);
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            flex-shrink: 0;
-        }
-
-        #sidebar-panel .sidebar-actions button {
-            padding: 8px 16px;
-            border-radius: var(--radius-xl);
-            border: none;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition-fast);
-            letter-spacing: 0.2px;
-        }
-
-        #sidebar-panel .sidebar-actions .btn-delete {
-            background: transparent;
-            color: var(--error);
-            border: 1px solid var(--error);
-        }
-
-        #sidebar-panel .sidebar-actions .btn-delete:hover {
-            background: var(--error);
-            color: #fff;
-            box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
-        }
-
-        #sidebar-panel .sidebar-actions .btn-duplicate {
-            background: transparent;
-            color: var(--accent-primary);
-            border: 1px solid var(--accent-primary);
-        }
-
-        #sidebar-panel .sidebar-actions .btn-duplicate:hover {
-            background: var(--accent-primary);
-            color: #fff;
-            box-shadow: 0 0 12px var(--accent-glow);
-        }
-
-        #sidebar-panel .sidebar-actions .btn-save {
-            background: var(--accent-primary);
-            color: #fff;
-            box-shadow: 0 2px 8px var(--accent-glow);
-        }
-
-        #sidebar-panel .sidebar-actions .btn-save:hover {
-            background: var(--accent-primary-dark);
-            box-shadow: 0 4px 16px var(--accent-glow);
-        }
-
-        /* ========== LOG PANEL ========== */
+        /* ========== LOG PANEL (ahora dentro de #main-view) ========== */
         #log-panel {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 90;
             background: var(--bg-secondary);
             border-top: 1px solid var(--border-subtle);
             box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);
-            transition: transform var(--transition-normal), right var(--transition-normal);
+            transition: max-height var(--transition-normal);
             max-height: 35vh;
             display: flex;
             flex-direction: column;
+            flex-shrink: 0;
         }
 
         #log-panel.collapsed {
-            transform: translateY(calc(100% - var(--log-panel-height)));
-        }
-
-        /* When sidebar is open, log panel should not cover it */
-        #sidebar-panel.open ~ #log-panel {
-            right: var(--sidebar-width);
+            max-height: var(--log-panel-height);
         }
 
         #log-panel .log-header {
@@ -812,7 +602,9 @@
             padding: 8px 14px;
             font-family: var(--font-mono);
             font-size: 11px;
-            max-height: 25vh;
+            min-height: 0;
+            user-select: text;
+            -webkit-user-select: text;
         }
 
         #log-panel .log-body .log-entry {
@@ -855,6 +647,218 @@
             font-style: italic;
             text-align: center;
             padding: 20px;
+        }
+
+        /* ========== SIDEBAR PANEL ========== */
+        #sidebar-panel {
+            width: 0;
+            min-width: 0;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width var(--transition-normal);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+
+        #sidebar-panel.open {
+            width: var(--sidebar-width);
+        }
+
+        #sidebar-panel .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            min-height: 48px;
+            flex-shrink: 0;
+        }
+
+        #sidebar-panel .sidebar-header h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #sidebar-panel .sidebar-header .close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-fast);
+            box-shadow: 2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light);
+            flex-shrink: 0;
+        }
+
+        #sidebar-panel .sidebar-header .close-btn:hover {
+            color: var(--error);
+        }
+
+        #sidebar-panel .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        #sidebar-panel .sidebar-content .field-group {
+            margin-bottom: 14px;
+        }
+
+        #sidebar-panel .sidebar-content .field-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        #sidebar-panel .sidebar-content .field-group input,
+        #sidebar-panel .sidebar-content .field-group select,
+        #sidebar-panel .sidebar-content .field-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-medium);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            transition: var(--transition-fast);
+            box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), inset -2px -2px 4px var(--shadow-inset-light);
+            font-family: var(--font-sans);
+        }
+
+        #sidebar-panel .sidebar-content .field-group input:focus,
+        #sidebar-panel .sidebar-content .field-group select:focus,
+        #sidebar-panel .sidebar-content .field-group textarea:focus {
+            border-color: var(--accent-primary);
+            box-shadow: inset 2px 2px 4px var(--shadow-inset-dark), 0 0 0 2px var(--accent-glow);
+        }
+
+        #sidebar-panel .sidebar-content .field-group input:disabled,
+        #sidebar-panel .sidebar-content .field-group select:disabled,
+        #sidebar-panel .sidebar-content .field-group textarea:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: var(--bg-secondary);
+        }
+
+        #sidebar-panel .sidebar-content .field-group textarea {
+            min-height: 70px;
+            resize: vertical;
+        }
+
+        #sidebar-panel .sidebar-content .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent-yellow);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 20px 0 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        #sidebar-panel .sidebar-actions {
+            padding: 12px 16px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+
+        /* Estilos globales para botones de acción */
+        .btn-save {
+            background: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 2px 8px var(--accent-glow);
+            padding: 8px 16px;
+            border-radius: var(--radius-xl);
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            letter-spacing: 0.2px;
+        }
+
+        .btn-save:hover {
+            background: var(--accent-primary-dark);
+            box-shadow: 0 4px 16px var(--accent-glow);
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 2px 8px var(--accent-glow);
+            padding: 8px 16px;
+            border-radius: var(--radius-xl);
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            letter-spacing: 0.2px;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-primary-dark);
+            box-shadow: 0 4px 14px var(--accent-glow);
+        }
+
+        .btn-delete {
+            background: transparent;
+            color: var(--error);
+            border: 1px solid var(--error);
+            padding: 8px 16px;
+            border-radius: var(--radius-xl);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            letter-spacing: 0.2px;
+        }
+
+        .btn-delete:hover {
+            background: var(--error);
+            color: #fff;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-duplicate {
+            background: transparent;
+            color: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
+            padding: 8px 16px;
+            border-radius: var(--radius-xl);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            letter-spacing: 0.2px;
+        }
+
+        .btn-duplicate:hover {
+            background: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 0 12px var(--accent-glow);
         }
 
         /* ========== MODALS ========== */
@@ -1054,8 +1058,17 @@
             #sidebar-panel.open {
                 width: 100%;
             }
-            #log-panel {
-                right: 0 !important;
+            #toolbar {
+                flex-wrap: wrap;
+                gap: 4px;
+                padding: 4px 8px;
+            }
+            #toolbar input[type="text"] {
+                width: 120px;
+            }
+            #toolbar .toolbar-entity-btns .entity-type-btn {
+                padding: 4px 6px;
+                font-size: 10px;
             }
         }
     </style>
@@ -1086,38 +1099,39 @@
     <!-- ==================== MAIN CONTAINER ==================== -->
     <div id="main-container">
 
-        <!-- ==================== TOOLBAR / FILTERS ==================== -->
+        <!-- ==================== TOOLBAR UNIFICADO ==================== -->
         <div id="toolbar">
-            <input type="text" id="filter-search" placeholder="🔍 Buscar ID, nombre..." title="Atajo: F">
-            <select id="filter-type" title="Filtrar por tipo de entidad">
-                <option value="all">Todos los tipos</option>
-                <option value="containers">Contenedores (T)</option>
-                <option value="connectors">Conectores (C)</option>
-                <option value="wires">Cables (W)</option>
-                <option value="mates">Acoples (M)</option>
-            </select>
-            <select id="filter-net" title="Filtrar por red (net)">
-                <option value="all">Todas las redes</option>
-            </select>
-            <select id="filter-section" title="Filtrar por sección">
-                <option value="all">Todas las secciones</option>
-            </select>
-            <button class="clear-filters-btn" id="clear-filters-btn" title="Limpiar filtros">✕ Limpiar</button>
+            <input type="text" id="filter-search" placeholder="🔍 Buscar..." title="Atajo: F">
+
+            <div class="toolbar-entity-btns" id="toolbar-entity-btns">
+                <button class="entity-type-btn active" data-entity="containers">📦 Contenedores</button>
+                <button class="entity-type-btn" data-entity="connectors">🔌 Conectores</button>
+                <button class="entity-type-btn" data-entity="wires">🔗 Cables</button>
+                <button class="entity-type-btn" data-entity="mates">🧷 Acoples</button>
+                <button class="entity-type-btn" data-entity="catalogs">📚 Catálogos</button>
+            </div>
+
+            <div id="route-filters">
+                <select id="route-from" title="Conector origen">
+                    <option value="">Origen</option>
+                </select>
+                <select id="route-to" title="Conector destino">
+                    <option value="">Destino</option>
+                </select>
+                <select id="route-net" title="Filtrar por señal">
+                    <option value="">Todas las señales</option>
+                </select>
+            </div>
+
             <span class="filter-counter" id="filter-counter">Mostrando todo</span>
+
+            <button class="add-btn" id="toolbar-add-btn" title="Añadir nueva entidad">+ Añadir</button>
         </div>
 
         <!-- ==================== CONTENT AREA ==================== -->
         <div id="content-area">
-            <!-- Main view: table or visual -->
             <div id="main-view">
                 <div id="table-view">
-                    <div id="table-toolbar">
-                        <button class="entity-type-btn active" data-entity="containers">📦 Contenedores</button>
-                        <button class="entity-type-btn" data-entity="connectors">🔌 Conectores</button>
-                        <button class="entity-type-btn" data-entity="wires">🔗 Cables</button>
-                        <button class="entity-type-btn" data-entity="mates">🧷 Acoples</button>
-                        <button class="add-btn" id="table-add-btn" title="Añadir nueva entidad">+ Añadir</button>
-                    </div>
                     <div id="table-wrapper">
                         <table id="data-table">
                             <thead id="data-table-head"></thead>
@@ -1147,9 +1161,33 @@
                         <g id="viewport"></g>
                     </svg>
                 </div>
+
+                <!-- ==================== LOG PANEL ==================== -->
+                <div id="log-panel" class="collapsed">
+                    <div class="log-header" id="log-header-toggle" title="Clic para expandir/colapsar">
+                        <div class="log-title">
+                            📋 Registro de validación
+                            <span class="log-counters" id="log-counters">
+                                <span class="counter-error" id="counter-error">0</span>
+                                <span class="counter-warning" id="counter-warning">0</span>
+                                <span class="counter-info" id="counter-info">0</span>
+                            </span>
+                        </div>
+                        <div class="log-actions">
+                            <button id="log-copy-btn" title="Copiar al portapapeles">📋 Copiar</button>
+                            <button id="log-filter-errors" title="Mostrar/ocultar errores">Errores</button>
+                            <button id="log-filter-warnings" title="Mostrar/ocultar advertencias">Warnings</button>
+                            <button id="log-filter-info" title="Mostrar/ocultar info">Info</button>
+                            <button id="log-clear-btn" title="Limpiar todos los registros">🗑</button>
+                        </div>
+                    </div>
+                    <div class="log-body" id="log-body">
+                        <div class="log-empty">Sin mensajes. Carga un archivo JSON para comenzar.</div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Sidebar panel (now in flow, right column) -->
+            <!-- Sidebar panel -->
             <aside id="sidebar-panel">
                 <div class="sidebar-header">
                     <h3 id="sidebar-title">Detalles</h3>
@@ -1158,29 +1196,6 @@
                 <div class="sidebar-content" id="sidebar-content"></div>
                 <div class="sidebar-actions" id="sidebar-actions"></div>
             </aside>
-        </div>
-    </div>
-
-    <!-- ==================== LOG PANEL ==================== -->
-    <div id="log-panel" class="collapsed">
-        <div class="log-header" id="log-header-toggle" title="Clic para expandir/colapsar">
-            <div class="log-title">
-                📋 Registro de validación
-                <span class="log-counters" id="log-counters">
-                    <span class="counter-error" id="counter-error">0</span>
-                    <span class="counter-warning" id="counter-warning">0</span>
-                    <span class="counter-info" id="counter-info">0</span>
-                </span>
-            </div>
-            <div class="log-actions">
-                <button id="log-filter-errors" title="Mostrar/ocultar errores">Errores</button>
-                <button id="log-filter-warnings" title="Mostrar/ocultar advertencias">Warnings</button>
-                <button id="log-filter-info" title="Mostrar/ocultar info">Info</button>
-                <button id="log-clear-btn" title="Limpiar todos los registros">🗑 Limpiar</button>
-            </div>
-        </div>
-        <div class="log-body" id="log-body">
-            <div class="log-empty">Sin mensajes. Carga un archivo JSON para comenzar.</div>
         </div>
     </div>
 
@@ -1193,13 +1208,12 @@
     <!-- ==================== TOOLTIP ==================== -->
     <div class="tooltip" id="tooltip" style="display:none;"></div>
 
-    <!-- ==================== SCRIPTS (orden obligatorio) ==================== -->
+    <!-- ==================== SCRIPTS ==================== -->
     <script src="js/app.js"></script>
     <script src="js/data.js"></script>
     <script src="js/render.js"></script>
     <script src="js/interaction.js"></script>
     <script>
-        // Inicializar la aplicación cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => App.init());
     </script>
 </body>
